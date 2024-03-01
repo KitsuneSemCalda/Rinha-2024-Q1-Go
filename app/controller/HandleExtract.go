@@ -14,10 +14,11 @@ import (
 
 func HandleExtrato(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	id, err := strconv.Atoi(vars["id"])
+	id, _ := strconv.Atoi(vars["id"])
 
-	if err != nil {
-		http.Error(w, "Error: Occured an unknown error in convert id: "+err.Error(), http.StatusUnprocessableEntity)
+	if id < 1 || id > 5 {
+		log.Printf("Error: ClientID isn't registered in database: %d", id)
+		http.Error(w, "Error: User not found", http.StatusNotFound)
 		return
 	}
 
@@ -42,7 +43,7 @@ func HandleExtrato(w http.ResponseWriter, r *http.Request) {
 		transacoes, err := database.GetLast10Transactions(id)
 
 		if err != nil {
-			log.Printf("Occured an Unknown error in GetLast10Transactions: %s",
+			log.Printf("Error: Occured an Unknown error in GetLast10Transactions: %s",
 				err.Error())
 		}
 

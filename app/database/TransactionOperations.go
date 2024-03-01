@@ -15,16 +15,18 @@ func CreateTransaction(clienteID int, t *models.TransacaoRequest) {
 
 	var transaction models.Transacao
 	transaction.ClienteID = clienteID
-	// transaction.ID = clienteID // You might want to remove this line
 	transaction.Valor = t.Valor
 	transaction.Tipo = t.Tipo
 	transaction.Descricao = t.Descricao
 	transaction.RealizadaEm = time.Now()
 
-	if err := DB.Create(&transaction).Error; err != nil {
+	tx := DB.Begin()
+	if err := tx.Create(&transaction).Error; err != nil {
 		log.Printf("Error: Failed to create transaction: %v", err)
+		tx.Rollback()
 		return
 	}
+	tx.Commit()
 }
 
 func GetLast10Transactions(clienteID int) ([]*models.Transacao, error) {

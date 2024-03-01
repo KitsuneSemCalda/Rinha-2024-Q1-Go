@@ -59,7 +59,8 @@ func HandleTransaction(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, _ := strconv.Atoi(vars["id"])
 
-	if id < 0 || id > 5 {
+	if id < 1 || id > 5 {
+		log.Printf("Error: ClientID isn't registered in database: %d", id)
 		http.Error(w, "Error: User not found", http.StatusNotFound)
 		return
 	}
@@ -67,6 +68,7 @@ func HandleTransaction(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&request)
 
 	if err != nil {
+		log.Printf("Error: Occurred an unknown error decoding request: %s", err.Error())
 		http.Error(w, "Error: Occured an unknown error decoding request: "+err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
