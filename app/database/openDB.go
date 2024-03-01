@@ -12,7 +12,7 @@ import (
 var DB *gorm.DB
 
 func init() {
-	time.Sleep(5 * time.Second)
+	time.Sleep(2 * time.Second) // Enough time to start the database
 
 	var err error
 

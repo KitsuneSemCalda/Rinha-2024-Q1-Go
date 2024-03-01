@@ -4,7 +4,6 @@ import (
 	"RinhaBackend/app/database"
 	"RinhaBackend/app/models"
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -12,34 +11,6 @@ import (
 
 	"github.com/gorilla/mux"
 )
-
-func ValidateExtratoResponse(response models.ExtratoResponse) error {
-	_, err := time.Parse(time.RFC3339, response.Saldo.DataExtrato)
-	if err != nil {
-		return errors.New("invalid date format for DataExtrato")
-	}
-
-	if response.Saldo.Limite < 0 {
-		return errors.New("limit should not be negative")
-	}
-
-	for _, transacao := range response.UltimasTransacoes {
-		if transacao.Valor < 0 {
-			return errors.New("transaction value should not be negative")
-		}
-
-		if transacao.Tipo != "c" && transacao.Tipo != "d" {
-			return errors.New("invalid transaction type")
-		}
-
-		_, err := time.Parse(time.RFC3339, transacao.RealizadaEm.String())
-		if err != nil {
-			return errors.New("invalid date format for RealizadaEm")
-		}
-	}
-
-	return nil
-}
 
 func HandleExtrato(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -64,10 +35,16 @@ func HandleExtrato(w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case err := <-errChan:
-		http.Error(w, "Error: Occured an unknown error in get client: "+err.Error(), http.StatusNotFound)
+		http.Error(w, "Error: Occured an unknown error in get client: "+err.Error(),
+			http.StatusNotFound)
 		return
 	case cliente := <-clienteChan:
-		transacoes := database.GetLast10Transactions(cliente.ID)
+		transacoes, err := database.GetLast10Transactions(id)
+
+		if err != nil {
+			log.Printf("Occured an Unknown error in GetLast10Transactions: %s",
+				err.Error())
+		}
 
 		response := models.ExtratoResponse{
 			Saldo: models.Saldo{
@@ -76,14 +53,6 @@ func HandleExtrato(w http.ResponseWriter, r *http.Request) {
 				Limite:      cliente.Limite,
 			},
 			UltimasTransacoes: transacoes,
-		}
-
-		err = ValidateExtratoResponse(response)
-
-		if err != nil {
-			log.Printf("Error: Occured an unknown error in validate response: %s", err.Error())
-			w.WriteHeader(http.StatusUnprocessableEntity)
-			return
 		}
 
 		json.NewEncoder(w).Encode(response)

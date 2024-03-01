@@ -59,6 +59,11 @@ func HandleTransaction(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, _ := strconv.Atoi(vars["id"])
 
+	if id < 0 || id > 5 {
+		http.Error(w, "Error: User not found", http.StatusNotFound)
+		return
+	}
+
 	err := json.NewDecoder(r.Body).Decode(&request)
 
 	if err != nil {

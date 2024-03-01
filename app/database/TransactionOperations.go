@@ -2,23 +2,65 @@ package database
 
 import (
 	"RinhaBackend/app/models"
+	"log"
 	"time"
 )
 
-func CreateTransaction(id int, t *models.TransacaoRequest) {
-	var transaction models.Transacao
+func CreateTransaction(clienteID int, t *models.TransacaoRequest) {
+	var cliente models.Cliente
+	if err := DB.First(&cliente, clienteID).Error; err != nil {
+		log.Printf("Error: Cliente with ID %d not found: %v", clienteID, err)
+		return
+	}
 
-	transaction.ID = id
+	var transaction models.Transacao
+	transaction.ClienteID = clienteID
+	// transaction.ID = clienteID // You might want to remove this line
 	transaction.Valor = t.Valor
 	transaction.Tipo = t.Tipo
 	transaction.Descricao = t.Descricao
 	transaction.RealizadaEm = time.Now()
 
-	DB.Create(transaction)
+	if err := DB.Create(&transaction).Error; err != nil {
+		log.Printf("Error: Failed to create transaction: %v", err)
+		return
+	}
 }
 
-func GetLast10Transactions(clienteID int) []models.Transacao {
-	var transactions []models.Transacao
-	DB.Where("cliente_id = ?", clienteID).Order("realizada_em desc").Limit(10).Find(&transactions)
-	return transactions
+func GetLast10Transactions(clienteID int) ([]*models.Transacao, error) {
+	var transactions []*models.Transacao
+
+	sqlDB, err := DB.DB()
+
+	if err != nil {
+		log.Printf("Can't open sql in gorm: %s", err.Error())
+		return nil, err
+	}
+
+	query := `
+	select id, cliente_id, valor, tipo, descricao, realizada_em
+	from transacoes
+	where cliente_id = $1
+	order by realizada_em desc
+	limit 10
+	`
+
+	rows, err := sqlDB.Query(query, clienteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		tr := new(models.Transacao)
+
+		err := rows.Scan(&tr.ID, &tr.ClienteID, &tr.Valor, &tr.Tipo, &tr.Descricao, &tr.RealizadaEm)
+		if err != nil {
+			return nil, err
+		}
+
+		transactions = append(transactions, tr)
+	}
+
+	return transactions, nil
 }

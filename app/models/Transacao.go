@@ -3,6 +3,7 @@ package models
 import "time"
 
 type Transacao struct {
+	ClienteID   int
 	ID          int
 	Valor       int
 	Tipo        string
