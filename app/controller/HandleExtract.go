@@ -45,6 +45,8 @@ func HandleExtrato(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("Error: Occured an Unknown error in GetLast10Transactions: %s",
 				err.Error())
+			http.Error(w, "Error occured in getLast10Transactions", http.StatusUnprocessableEntity)
+			return
 		}
 
 		response := models.ExtratoResponse{

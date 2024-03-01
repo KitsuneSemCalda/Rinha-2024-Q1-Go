@@ -32,7 +32,7 @@ func processTransactionQueue() {
 
 func validateRequest(req models.TransacaoRequest, client *models.Cliente) error {
 	if len(req.Descricao) < 1 || len(req.Descricao) > 10 {
-		log.Printf("Unconsistent transaction description: size equal %d", len(req.Descricao))
+		log.Printf("Error: unconsistent transaction description: size equal %d", len(req.Descricao))
 		return errors.New("unconsistent transaction description")
 	}
 
@@ -41,14 +41,14 @@ func validateRequest(req models.TransacaoRequest, client *models.Cliente) error 
 		value := client.Saldo - req.Valor
 
 		if value < -client.Limite {
-			log.Printf("Unconsistent transaction %d is minor than %d", value, client.Limite)
+			log.Printf("Error: unconsistent transaction %d is minor than %d", value, client.Limite)
 			return errors.New("unconsistent transaction")
 		}
 		return nil
 	}
 
 	if req.Tipo != "d" && req.Tipo != "c" {
-		log.Printf("Unconsistent transaction type: %s", req.Tipo)
+		log.Printf("Error: unconsistent transaction type: %s", req.Tipo)
 		return errors.New("unconsistent transaction type")
 	}
 
@@ -57,7 +57,13 @@ func validateRequest(req models.TransacaoRequest, client *models.Cliente) error 
 
 func HandleTransaction(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	id, _ := strconv.Atoi(vars["id"])
+	id, err := strconv.Atoi(vars["id"])
+
+	if err != nil {
+		log.Printf("Error: Unknown error in convert id: %s", err.Error())
+		http.Error(w, "Error: Convert ID Error: "+err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
 
 	if id < 1 || id > 5 {
 		log.Printf("Error: ClientID isn't registered in database: %d", id)
@@ -65,7 +71,7 @@ func HandleTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := json.NewDecoder(r.Body).Decode(&request)
+	err = json.NewDecoder(r.Body).Decode(&request)
 
 	if err != nil {
 		log.Printf("Error: Occurred an unknown error decoding request: %s", err.Error())
@@ -116,6 +122,12 @@ func HandleTransaction(w http.ResponseWriter, r *http.Request) {
 			Saldo:  newSaldo,
 		}
 
-		json.NewEncoder(w).Encode(response)
+		err = json.NewEncoder(w).Encode(response)
+
+		if err != nil {
+			log.Printf("Error: Unknown error in enconding response: %s", err.Error())
+			http.Error(w, "Error: In Enconding Json: "+err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
 	}
 }
