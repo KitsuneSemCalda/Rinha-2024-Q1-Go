@@ -2,6 +2,7 @@ package main
 
 import (
 	"RinhaBackend/app/controller"
+	"RinhaBackend/app/database"
 	"RinhaBackend/app/utils"
 	"net/http"
 
@@ -9,6 +10,8 @@ import (
 )
 
 func main() {
+	database.StartDB()
+
 	port := utils.GetPort()
 
 	r := mux.NewRouter()

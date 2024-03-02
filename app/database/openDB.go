@@ -12,10 +12,10 @@ import (
 var DB *gorm.DB
 var err error
 
-func init() {
+func StartDB() {
 	time.Sleep(3)
 
-	dsn := utils.GetDSN()
+	dsn := utils.GenerateDSN()
 
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 
@@ -31,5 +31,5 @@ func init() {
 
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
-	sqlDB.SetConnMaxLifetime(10 * time.Minute)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 }
