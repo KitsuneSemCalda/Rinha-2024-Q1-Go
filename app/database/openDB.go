@@ -10,11 +10,10 @@ import (
 )
 
 var DB *gorm.DB
+var err error
 
 func init() {
-	time.Sleep(2 * time.Second) // Enough time to start the database
-
-	var err error
+	time.Sleep(3)
 
 	dsn := utils.GetDSN()
 
