@@ -17,7 +17,7 @@ func StartDB() {
 
 	log.Printf("Unsecure show me the DSN: %s", dsn)
 
-	for i := 1; i < 11; i++ {
+	for i := 3; i < 11; i++ {
 		DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 
 		if err == nil {

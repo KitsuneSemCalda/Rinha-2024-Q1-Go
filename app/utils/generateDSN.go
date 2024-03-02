@@ -14,10 +14,10 @@ func GenerateDSN() string {
 	dbname := os.Getenv("POSTGRES_DB")
 
 	if !(host == "") && !(user == "") && !(password == "") && !(dbname == "") {
-		dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
+		dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=5432 sslmode=disable",
 			host, user, password, dbname)
 	} else {
-		dsn = "host=db user=postgres password=postgres dbname=rinha sslmode=disable"
+		dsn = "host=db user=admin password=123 dbname=rinha port=5432 sslmode=disable"
 	}
 
 	return dsn
