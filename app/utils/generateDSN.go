@@ -19,4 +19,6 @@ func GenerateDSN() string {
 	} else {
 		dsn = "host=db user=postgres password=postgres dbname=rinha sslmode=disable"
 	}
+
+	return dsn
 }
