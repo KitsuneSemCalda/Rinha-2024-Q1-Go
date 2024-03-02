@@ -17,6 +17,8 @@ func StartDB() {
 
 	dsn := utils.GenerateDSN()
 
+	log.Printf("Unsecure show me the DSN: %s", dsn)
+
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 
 	if err != nil {
