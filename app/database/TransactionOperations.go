@@ -6,10 +6,46 @@ import (
 	"time"
 )
 
+func validateExtratoAndTransactions(cliente *models.Cliente, transacoes []*models.Transacao) bool {
+	if cliente.Saldo < 0 {
+		log.Printf("Error: Invalid Saldo (Cliente ID %d): %d", cliente.ID, cliente.Saldo)
+		return false
+	}
+
+	if cliente.Limite < 0 {
+		log.Printf("Error: Invalid Limite (Cliente ID %d): %d", cliente.ID, cliente.Limite)
+		return false
+	}
+
+	for _, transacao := range transacoes {
+		if transacao.Valor < 0 {
+			log.Printf("Error: Invalid Valor (Cliente ID %d, Transacao ID %d): %d", cliente.ID, transacao.ID, transacao.Valor)
+			return false
+		}
+
+		if len(transacao.Descricao) < 1 || len(transacao.Descricao) > 10 {
+			log.Printf("Error: Invalid Descricao (Cliente ID %d, Transacao ID %d): %s", cliente.ID, transacao.ID, transacao.Descricao)
+			return false
+		}
+
+		if transacao.Tipo != "c" && transacao.Tipo != "d" {
+			log.Printf("Error: Invalid Tipo (Cliente ID %d, Transacao ID %d): %s", cliente.ID, transacao.ID, transacao.Tipo)
+			return false
+		}
+	}
+
+	return true
+}
+
 func CreateTransaction(clienteID int, t *models.TransacaoRequest) {
 	var cliente models.Cliente
 	if err := DB.First(&cliente, clienteID).Error; err != nil {
 		log.Printf("Error: Cliente with ID %d not found: %v", clienteID, err)
+		return
+	}
+
+	if !validateExtratoAndTransactions(&cliente, []*models.Transacao{{Valor: t.Valor, Tipo: t.Tipo, Descricao: t.Descricao}}) {
+		log.Println("Error: Invalid transaction data")
 		return
 	}
 
@@ -32,36 +68,9 @@ func CreateTransaction(clienteID int, t *models.TransacaoRequest) {
 func GetLast10Transactions(clienteID int) ([]*models.Transacao, error) {
 	var transactions []*models.Transacao
 
-	sqlDB, err := DB.DB()
-
-	if err != nil {
-		log.Printf("Can't open sql in gorm: %s", err.Error())
+	if err := DB.Where("cliente_id = $1", clienteID).Order("realizada_em desc").Limit(10).Find(&transactions).Error; err != nil {
+		log.Printf("Error: Failed to fetch transactions: %v", err)
 		return nil, err
-	}
-
-	query := `
-	select id, cliente_id, valor, tipo, descricao, realizada_em
-	from transacoes
-	where cliente_id = $1
-	order by realizada_em desc
-	limit 10
-	`
-
-	rows, err := sqlDB.Query(query, clienteID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		tr := new(models.Transacao)
-
-		err := rows.Scan(&tr.ID, &tr.ClienteID, &tr.Valor, &tr.Tipo, &tr.Descricao, &tr.RealizadaEm)
-		if err != nil {
-			return nil, err
-		}
-
-		transactions = append(transactions, tr)
 	}
 
 	return transactions, nil

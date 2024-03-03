@@ -80,17 +80,20 @@ func HandleExtrato(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		validateExtratoAndTransactions(cliente, transacoes)
+		if validateExtratoAndTransactions(cliente, transacoes) {
 
-		response := models.ExtratoResponse{
-			Saldo: models.Saldo{
-				Total:       cliente.Saldo,
-				DataExtrato: time.Now().Format(time.RFC3339),
-				Limite:      cliente.Limite,
-			},
-			UltimasTransacoes: transacoes,
+			response := models.ExtratoResponse{
+				Saldo: models.Saldo{
+					Total:       cliente.Saldo,
+					DataExtrato: time.Now().Format(time.RFC3339),
+					Limite:      cliente.Limite,
+				},
+				UltimasTransacoes: transacoes,
+			}
+
+			json.NewEncoder(w).Encode(response)
+		} else {
+			log.Println("OK: Occured an error in validation")
 		}
-
-		json.NewEncoder(w).Encode(response)
 	}
 }
