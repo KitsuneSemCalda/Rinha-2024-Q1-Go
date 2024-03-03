@@ -12,6 +12,37 @@ import (
 	"github.com/gorilla/mux"
 )
 
+func validateExtratoAndTransactions(c *models.Cliente, t []*models.Transacao) bool {
+	if c.Saldo < 0 {
+		log.Printf("Error: Invalid Saldo (Cliente ID %d): %d", c.ID, c.Saldo)
+		return false
+	}
+
+	if c.Limite < 0 {
+		log.Printf("Error: Invalid Limite (Cliente ID %d): %d", c.ID, c.Limite)
+		return false
+	}
+
+	for _, transacao := range t {
+		if transacao.Valor < 0 {
+			log.Printf("Error: Invalid Valor (Cliente ID %d, Transacao ID %d): %d", c.ID, transacao.ID, transacao.Valor)
+			return false
+		}
+
+		if len(transacao.Descricao) < 1 || len(transacao.Descricao) > 10 {
+			log.Printf("Error: Invalid Descricao (Cliente ID %d, Transacao ID %d): %s", c.ID, transacao.ID, transacao.Descricao)
+			return false
+		}
+
+		if transacao.Tipo != "c" && transacao.Tipo != "d" {
+			log.Printf("Error: Invalid Tipo (Cliente ID %d, Transacao ID %d): %s", c.ID, transacao.ID, transacao.Tipo)
+			return false
+		}
+	}
+
+	return true
+}
+
 func HandleExtrato(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, _ := strconv.Atoi(vars["id"])
@@ -48,6 +79,8 @@ func HandleExtrato(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Error occured in getLast10Transactions", http.StatusUnprocessableEntity)
 			return
 		}
+
+		validateExtratoAndTransactions(cliente, transacoes)
 
 		response := models.ExtratoResponse{
 			Saldo: models.Saldo{

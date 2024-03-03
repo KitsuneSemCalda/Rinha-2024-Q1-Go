@@ -17,7 +17,7 @@ func StartDB() {
 
 	log.Printf("Unsecure show me the DSN: %s", dsn)
 
-	for i := 3; i < 11; i++ {
+	for i := 3; i <= 14; i++ {
 		DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 
 		if err == nil {
@@ -42,4 +42,6 @@ func StartDB() {
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+
+	log.Printf("OK: Gorm connect with sucess")
 }
