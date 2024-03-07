@@ -4,6 +4,7 @@ import (
 	"RinhaBackend/app/models"
 	"context"
 	"log"
+	"sort"
 	"sync"
 	"time"
 )
@@ -74,17 +75,37 @@ func CreateTransaction(clienteID int, t *models.TransacaoRequest) {
 func GetLast10Transactions(ctx context.Context, clienteID int) ([]*models.Transacao, error) {
 	mu.Lock()
 	defer mu.Unlock()
-	
+
 	var transactions []*models.Transacao
+
+	fetchDone := make(chan bool)
 
 	go func() {
 		result := DB.Where("cliente_id = ?", clienteID).Order("realizada_em desc").Order("id desc").Limit(10).Find(&transactions)
 
 		if result.Error != nil {
 			log.Printf("Error: Failed to fetch transactions: %v", result.Error)
-			return
 		}
+
+		fetchDone <- true
 	}()
+
+	<-fetchDone
+
+	sortDone := make(chan bool)
+
+	go func() {
+		sort.Slice(transactions, func(i, j int) bool {
+			if transactions[i].RealizadaEm.Equal(transactions[j].RealizadaEm) {
+				return transactions[i].ID > transactions[j].ID
+			}
+			return transactions[i].RealizadaEm.After(transactions[j].RealizadaEm)
+		})
+
+		sortDone <- true
+	}()
+
+	<-sortDone
 
 	return transactions, nil
 }
