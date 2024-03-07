@@ -4,8 +4,11 @@ import (
 	"RinhaBackend/app/models"
 	"context"
 	"log"
+	"sync"
 	"time"
 )
+
+var mu sync.Mutex
 
 func validateExtratoAndTransactions(cliente *models.Cliente, transacoes []*models.Transacao) bool {
 	if cliente.Saldo < 0 {
@@ -69,10 +72,13 @@ func CreateTransaction(clienteID int, t *models.TransacaoRequest) {
 }
 
 func GetLast10Transactions(ctx context.Context, clienteID int) ([]*models.Transacao, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	
 	var transactions []*models.Transacao
 
 	go func() {
-		result := DB.Where("cliente_id = ?", clienteID).Order("realizada_em desc").Limit(10).Find(&transactions)
+		result := DB.Where("cliente_id = ?", clienteID).Order("realizada_em desc").Order("id desc").Limit(10).Find(&transactions)
 
 		if result.Error != nil {
 			log.Printf("Error: Failed to fetch transactions: %v", result.Error)
