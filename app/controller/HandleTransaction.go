@@ -31,9 +31,19 @@ func processTransactionQueue() {
 }
 
 func validateRequest(req models.TransacaoRequest, client *models.Cliente) error {
-	if len(req.Descricao) < 1 || len(req.Descricao) > 10 {
+	if req.Valor < 0 {
+		log.Printf("Error: unconsistent transaction value: %d", req.Valor)
+		return errors.New("unconsistent transaction value")
+	}
+
+	if req.Descricao == "" || (len(req.Descricao) < 1 || len(req.Descricao) > 10) {
 		log.Printf("Error: unconsistent transaction description: size equal %d", len(req.Descricao))
 		return errors.New("unconsistent transaction description")
+	}
+
+	if req.Tipo != "d" && req.Tipo != "c" {
+		log.Printf("Error: unconsistent transaction type: %s", req.Tipo)
+		return errors.New("unconsistent transaction type")
 	}
 
 	if req.Tipo == "d" {
@@ -47,26 +57,20 @@ func validateRequest(req models.TransacaoRequest, client *models.Cliente) error 
 		return nil
 	}
 
-	if req.Tipo != "d" && req.Tipo != "c" {
-		log.Printf("Error: unconsistent transaction type: %s", req.Tipo)
-		return errors.New("unconsistent transaction type")
-	}
-
 	return nil
 }
 
 func HandleTransaction(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])
 
 	if err != nil {
-		log.Printf("Error: Unknown error in convert id: %s", err.Error())
 		http.Error(w, "Error: Convert ID Error: "+err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
 	if id < 1 || id > 5 {
-		log.Printf("Error: ClientID isn't registered in database: %d", id)
 		http.Error(w, "Error: User not found", http.StatusNotFound)
 		return
 	}
@@ -74,16 +78,15 @@ func HandleTransaction(w http.ResponseWriter, r *http.Request) {
 	err = json.NewDecoder(r.Body).Decode(&request)
 
 	if err != nil {
-		log.Printf("Error: Occurred an unknown error decoding request: %s", err.Error())
 		http.Error(w, "Error: Occured an unknown error decoding request: "+err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
-	clienteChan := make(chan *models.Cliente)
-	errChan := make(chan error)
+	clienteChan := make(chan *models.Cliente, 1)
+	errChan := make(chan error, 1)
 
 	go func() {
-		cliente, err := database.GetCliente(id)
+		cliente, err := database.GetCliente(ctx, id)
 		if err != nil {
 			errChan <- err
 			return
@@ -95,7 +98,8 @@ func HandleTransaction(w http.ResponseWriter, r *http.Request) {
 	case err := <-errChan:
 		http.Error(w, "Error: Occured an unknown error in get client: "+err.Error(), http.StatusNotFound)
 		return
-	case cliente := <-clienteChan:
+	default:
+		cliente := <-clienteChan
 		err = validateRequest(request, cliente)
 		if err != nil {
 			http.Error(w, "Error: Occured an unknown error in validate request: "+err.Error(), http.StatusUnprocessableEntity)
@@ -122,12 +126,6 @@ func HandleTransaction(w http.ResponseWriter, r *http.Request) {
 			Saldo:  newSaldo,
 		}
 
-		err = json.NewEncoder(w).Encode(response)
-
-		if err != nil {
-			log.Printf("Error: Unknown error in enconding response: %s", err.Error())
-			http.Error(w, "Error: In Enconding Json: "+err.Error(), http.StatusUnprocessableEntity)
-			return
-		}
+		json.NewEncoder(w).Encode(response)
 	}
 }

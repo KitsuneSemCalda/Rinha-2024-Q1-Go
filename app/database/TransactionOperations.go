@@ -2,6 +2,7 @@ package database
 
 import (
 	"RinhaBackend/app/models"
+	"context"
 	"log"
 	"time"
 )
@@ -56,22 +57,28 @@ func CreateTransaction(clienteID int, t *models.TransacaoRequest) {
 	transaction.Descricao = t.Descricao
 	transaction.RealizadaEm = time.Now()
 
-	tx := DB.Begin()
-	if err := tx.Create(&transaction).Error; err != nil {
-		log.Printf("Error: Failed to create transaction: %v", err)
-		tx.Rollback()
-		return
-	}
-	tx.Commit()
+	go func() {
+		tx := DB.Begin()
+		if err := tx.Create(&transaction).Error; err != nil {
+			log.Printf("Error: Failed to create transaction: %v", err)
+			tx.Rollback()
+			return
+		}
+		tx.Commit()
+	}()
 }
 
-func GetLast10Transactions(clienteID int) ([]*models.Transacao, error) {
+func GetLast10Transactions(ctx context.Context, clienteID int) ([]*models.Transacao, error) {
 	var transactions []*models.Transacao
 
-	if err := DB.Where("cliente_id = $1", clienteID).Order("realizada_em desc").Limit(10).Find(&transactions).Error; err != nil {
-		log.Printf("Error: Failed to fetch transactions: %v", err)
-		return nil, err
-	}
+	go func() {
+		result := DB.Where("cliente_id = ?", clienteID).Order("realizada_em desc").Limit(10).Find(&transactions)
+
+		if result.Error != nil {
+			log.Printf("Error: Failed to fetch transactions: %v", result.Error)
+			return
+		}
+	}()
 
 	return transactions, nil
 }

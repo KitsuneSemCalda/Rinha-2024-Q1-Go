@@ -29,7 +29,7 @@ func validateExtratoAndTransactions(c *models.Cliente, t []*models.Transacao) bo
 			return false
 		}
 
-		if len(transacao.Descricao) < 1 || len(transacao.Descricao) > 10 {
+		if transacao.Descricao == "" || (len(transacao.Descricao) < 1 || len(transacao.Descricao) > 10) {
 			log.Printf("Error: Invalid Descricao (Cliente ID %d, Transacao ID %d): %s", c.ID, transacao.ID, transacao.Descricao)
 			return false
 		}
@@ -44,20 +44,21 @@ func validateExtratoAndTransactions(c *models.Cliente, t []*models.Transacao) bo
 }
 
 func HandleExtrato(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	vars := mux.Vars(r)
 	id, _ := strconv.Atoi(vars["id"])
 
 	if id < 1 || id > 5 {
-		log.Printf("Error: ClientID isn't registered in database: %d", id)
 		http.Error(w, "Error: User not found", http.StatusNotFound)
 		return
 	}
 
-	clienteChan := make(chan *models.Cliente)
-	errChan := make(chan error)
+	clienteChan := make(chan *models.Cliente, 1)
+	transacoesChan := make(chan []*models.Transacao, 1)
+	errChan := make(chan error, 1)
 
 	go func() {
-		cliente, err := database.GetCliente(id)
+		cliente, err := database.GetCliente(ctx, id)
 		if err != nil {
 			errChan <- err
 			return
@@ -65,23 +66,24 @@ func HandleExtrato(w http.ResponseWriter, r *http.Request) {
 		clienteChan <- cliente
 	}()
 
-	select {
-	case err := <-errChan:
-		http.Error(w, "Error: Occured an unknown error in get client: "+err.Error(),
-			http.StatusNotFound)
-		return
-	case cliente := <-clienteChan:
-		transacoes, err := database.GetLast10Transactions(id)
-
+	go func() {
+		transacoes, err := database.GetLast10Transactions(ctx, id)
 		if err != nil {
-			log.Printf("Error: Occured an Unknown error in GetLast10Transactions: %s",
-				err.Error())
-			http.Error(w, "Error occured in getLast10Transactions", http.StatusUnprocessableEntity)
+			errChan <- err
 			return
 		}
+		transacoesChan <- transacoes
+	}()
+
+	select {
+	case err := <-errChan:
+		http.Error(w, "Error: Occured an unknown error: "+err.Error(), http.StatusUnprocessableEntity)
+		return
+	default:
+		cliente := <-clienteChan
+		transacoes := <-transacoesChan
 
 		if validateExtratoAndTransactions(cliente, transacoes) {
-
 			response := models.ExtratoResponse{
 				Saldo: models.Saldo{
 					Total:       cliente.Saldo,
@@ -92,8 +94,6 @@ func HandleExtrato(w http.ResponseWriter, r *http.Request) {
 			}
 
 			json.NewEncoder(w).Encode(response)
-		} else {
-			log.Println("OK: Occured an error in validation")
 		}
 	}
 }

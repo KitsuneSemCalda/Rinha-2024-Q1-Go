@@ -2,6 +2,7 @@ package database
 
 import (
 	"RinhaBackend/app/models"
+	"context"
 	"errors"
 	"strconv"
 	"time"
@@ -12,41 +13,61 @@ import (
 
 var Cache = cache.New(5*time.Minute, 10*time.Minute)
 
-func GetCliente(id int) (*models.Cliente, error) {
-	cliente, found := getClienteInCache(id)
+func GetCliente(ctx context.Context, id int) (*models.Cliente, error) {
+	clienteChan := make(chan *models.Cliente, 1)
+	errChan := make(chan error, 1)
 
-	if found {
+	go func() {
+		cliente, found := getClienteInCache(id)
+		if found {
+			clienteChan <- cliente
+			return
+		}
+
+		cliente, found = getClienteInDB(ctx, id)
+		if !found {
+			errChan <- gorm.ErrRecordNotFound
+			return
+		}
+
+		Cache.Set(strconv.Itoa(id), cliente, cache.DefaultExpiration)
+		clienteChan <- cliente
+	}()
+
+	select {
+	case err := <-errChan:
+		return nil, err
+	case cliente := <-clienteChan:
 		return cliente, nil
 	}
-
-	cliente, found = getClienteInDB(id)
-
-	if !found {
-		return nil, gorm.ErrRecordNotFound
-	}
-
-	Cache.Set(strconv.Itoa(id), cliente, cache.DefaultExpiration)
-	return cliente, nil
 }
 
-func UpdateCliente(id int, updatedCliente models.Cliente) error {
-	if !updateClienteInCache(id, updatedCliente) {
-		return errors.New("failed to update cache")
-	}
+func UpdateCliente(ctx context.Context, id int, updatedCliente models.Cliente) error {
+	errChan := make(chan error, 1)
 
-	if !updateClienteInDB(id, updatedCliente) {
-		return errors.New("failed to update database")
-	}
+	go func() {
+		if !updateClienteInCache(id, updatedCliente) {
+			errChan <- errors.New("failed to update cache")
+			return
+		}
 
-	return nil
+		if !updateClienteInDB(ctx, id, updatedCliente) {
+			errChan <- errors.New("failed to update database")
+			return
+		}
+
+		errChan <- nil
+	}()
+
+	return <-errChan
 }
 
 // This private function garrants syncronization in cache and database
 
-func updateClienteInDB(id int, updatedCliente models.Cliente) bool {
+func updateClienteInDB(ctx context.Context, id int, updatedCliente models.Cliente) bool {
 	var cliente models.Cliente
 
-	tx := DB.Begin()
+	tx := DB.WithContext(ctx).Begin()
 
 	err := tx.Where("id = $1", id).First(&cliente).Error
 
@@ -74,7 +95,7 @@ func updateClienteInDB(id int, updatedCliente models.Cliente) bool {
 }
 
 func updateClienteInCache(id int, updatedCliente models.Cliente) bool {
-	_, err := GetCliente(id)
+	_, err := GetCliente(context.Background(), id)
 
 	if err != nil {
 		return false
@@ -84,10 +105,10 @@ func updateClienteInCache(id int, updatedCliente models.Cliente) bool {
 	return true
 }
 
-func getClienteInDB(id int) (*models.Cliente, bool) {
+func getClienteInDB(ctx context.Context, id int) (*models.Cliente, bool) {
 	var cliente models.Cliente
 
-	err := DB.Where("id = $1", id).First(&cliente).Error
+	err := DB.WithContext(ctx).Where("id = $1", id).First(&cliente).Error
 
 	if err != nil {
 		return nil, false
