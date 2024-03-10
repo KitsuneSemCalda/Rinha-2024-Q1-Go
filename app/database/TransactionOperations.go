@@ -4,7 +4,6 @@ import (
 	"RinhaBackend/app/models"
 	"context"
 	"log"
-	"sort"
 	"sync"
 	"time"
 )
@@ -35,6 +34,12 @@ func validateExtratoAndTransactions(cliente *models.Cliente, transacoes []*model
 
 		if transacao.Tipo != "c" && transacao.Tipo != "d" {
 			log.Printf("Error: Invalid Tipo (Cliente ID %d, Transacao ID %d): %s", cliente.ID, transacao.ID, transacao.Tipo)
+			return false
+		}
+
+		// Additional check: Ensure the transaction value does not exceed the client's limit
+		if transacao.Tipo == "d" && transacao.Valor > cliente.Limite {
+			log.Printf("Error: Transaction value exceeds limit (Cliente ID %d, Transacao ID %d): %d", cliente.ID, transacao.ID, transacao.Valor)
 			return false
 		}
 	}
@@ -73,39 +78,13 @@ func CreateTransaction(clienteID int, t *models.TransacaoRequest) {
 }
 
 func GetLast10Transactions(ctx context.Context, clienteID int) ([]*models.Transacao, error) {
-	mu.Lock()
-	defer mu.Unlock()
-
 	var transactions []*models.Transacao
 
-	fetchDone := make(chan bool)
+	result := DB.Where("cliente_id = ?", clienteID).Order("realizada_em desc").Limit(10).Find(&transactions)
 
-	go func() {
-		result := DB.Where("cliente_id = ?", clienteID).Order("realizada_em desc").Order("id desc").Limit(10).Find(&transactions)
-
-		if result.Error != nil {
-			log.Printf("Error: Failed to fetch transactions: %v", result.Error)
-		}
-
-		fetchDone <- true
-	}()
-
-	<-fetchDone
-
-	sortDone := make(chan bool)
-
-	go func() {
-		sort.Slice(transactions, func(i, j int) bool {
-			if transactions[i].RealizadaEm.Equal(transactions[j].RealizadaEm) {
-				return transactions[i].ID > transactions[j].ID
-			}
-			return transactions[i].RealizadaEm.After(transactions[j].RealizadaEm)
-		})
-
-		sortDone <- true
-	}()
-
-	<-sortDone
+	if result.Error != nil {
+		log.Printf("Error: Failed to fetch transactions: %v", result.Error)
+	}
 
 	return transactions, nil
 }

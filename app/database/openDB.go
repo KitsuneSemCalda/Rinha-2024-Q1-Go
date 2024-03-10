@@ -40,8 +40,8 @@ func StartDB() {
 	}
 
 	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(100)
-	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	sqlDB.SetMaxOpenConns(50)
+	sqlDB.SetConnMaxLifetime(10 * time.Second)
 
-	log.Printf("OK: Gorm connect with sucess")
+	log.Printf("OK: Gorm connect with success")
 }

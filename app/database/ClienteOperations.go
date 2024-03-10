@@ -8,118 +8,80 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
-	"gorm.io/gorm"
 )
 
-var Cache = cache.New(5*time.Minute, 10*time.Minute)
+var Cache = cache.New(5*time.Second, 10*time.Second)
 
 func GetCliente(ctx context.Context, id int) (*models.Cliente, error) {
-	clienteChan := make(chan *models.Cliente, 1)
-	errChan := make(chan error, 1)
-
-	go func() {
-		cliente, found := getClienteInCache(id)
-		if found {
-			clienteChan <- cliente
-			return
-		}
-
-		cliente, found = getClienteInDB(ctx, id)
-		if !found {
-			errChan <- gorm.ErrRecordNotFound
-			return
-		}
-
-		Cache.Set(strconv.Itoa(id), cliente, cache.DefaultExpiration)
-		clienteChan <- cliente
-	}()
-
-	select {
-	case err := <-errChan:
-		return nil, err
-	case cliente := <-clienteChan:
+	cliente, found := getClienteInCache(id)
+	if found {
 		return cliente, nil
 	}
+
+	cliente, err := getClienteInDB(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	Cache.Set(strconv.Itoa(id), cliente, cache.DefaultExpiration)
+	return cliente, nil
 }
 
 func UpdateCliente(ctx context.Context, id int, updatedCliente models.Cliente) error {
-	errChan := make(chan error, 1)
+	err := updateClienteInDB(ctx, id, updatedCliente)
+	if err != nil {
+		return err
+	}
 
-	go func() {
-		if !updateClienteInCache(id, updatedCliente) {
-			errChan <- errors.New("failed to update cache")
-			return
-		}
-
-		if !updateClienteInDB(ctx, id, updatedCliente) {
-			errChan <- errors.New("failed to update database")
-			return
-		}
-
-		errChan <- nil
-	}()
-
-	return <-errChan
+	updateClienteInCache(id, updatedCliente)
+	return nil
 }
 
-// This private function garrants syncronization in cache and database
-
-func updateClienteInDB(ctx context.Context, id int, updatedCliente models.Cliente) bool {
+func updateClienteInDB(ctx context.Context, id int, updatedCliente models.Cliente) error {
 	var cliente models.Cliente
 
 	tx := DB.WithContext(ctx).Begin()
 
-	err := tx.Where("id = $1", id).First(&cliente).Error
-
+	err := tx.Where("id = ?", id).First(&cliente).Error
 	if err != nil {
 		tx.Rollback()
-		return false
+		return err
 	}
 
 	if cliente.Version != updatedCliente.Version {
 		tx.Rollback()
-		return false
+		return errors.New("version mismatch")
 	}
 
 	updatedCliente.Version++
 
 	err = tx.Model(&cliente).Updates(updatedCliente).Error
-
 	if err != nil {
 		tx.Rollback()
-		return false
+		return err
 	}
 
 	tx.Commit()
-	return true
+	return nil
 }
 
-func updateClienteInCache(id int, updatedCliente models.Cliente) bool {
-	_, err := GetCliente(context.Background(), id)
-
-	if err != nil {
-		return false
-	}
-
+func updateClienteInCache(id int, updatedCliente models.Cliente) {
 	Cache.Set(strconv.Itoa(id), updatedCliente, cache.DefaultExpiration)
-	return true
 }
 
-func getClienteInDB(ctx context.Context, id int) (*models.Cliente, bool) {
+func getClienteInDB(ctx context.Context, id int) (*models.Cliente, error) {
 	var cliente models.Cliente
 
-	err := DB.WithContext(ctx).Where("id = $1", id).First(&cliente).Error
-
+	err := DB.WithContext(ctx).Where("id = ?", id).First(&cliente).Error
 	if err != nil {
-		return nil, false
+		return nil, err
 	}
 
-	return &cliente, true
+	return &cliente, nil
 }
 
 func getClienteInCache(id int) (*models.Cliente, bool) {
 	cliente, found := Cache.Get(strconv.Itoa(id))
-
 	if !found {
 		return nil, false
 	}
